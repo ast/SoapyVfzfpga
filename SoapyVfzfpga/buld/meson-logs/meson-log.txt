@@ -1,0 +1,15 @@
+Build started at 2018-05-21T10:33:30.197783
+Main binary: /usr/bin/python3
+Python system: Linux
+The Meson build system
+Version: 0.45.1
+Source dir: /home/albin/src/SoapyVfzfpga/SoapyVfzfpga
+Build dir: /home/albin/src/SoapyVfzfpga/SoapyVfzfpga/buld
+Build type: native build
+
+meson.build:2:1: ERROR: Expecting rparen got id.
+	version : '0.0.1',
+ ^
+For a block that started at 1,7
+project('SoapyVfzsdr', 'cpp', 'c'
+       ^
