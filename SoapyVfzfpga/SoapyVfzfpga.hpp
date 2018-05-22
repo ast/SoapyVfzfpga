@@ -11,17 +11,18 @@
 
 #include <SoapySDR/Device.hpp>
 #include <SoapySDR/Registry.hpp>
+#include <SoapySDR/ConverterRegistry.hpp>
 
 #include <cstdint>
-#include <iostream>     // std::cout
-#include <fstream>      // std::ifstream
-#include <istream>
+#include <iostream>
+#include <fstream>
 
 #include "alsa.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+/*
 typedef enum stream_format_t
 {
     STREAM_FORMAT_FLOAT32,
@@ -29,17 +30,22 @@ typedef enum stream_format_t
     STREAM_FORMAT_INT16,
     STREAM_FORMAT_INT8,
 } stream_format_t;
-
+*/
+ 
 class SoapyVfzfgpa : public SoapySDR::Device
 {
+    
+
 private:
     snd_pcm_t* d_pcm_handle;
     uint16_t d_period_size;
-    stream_format_t d_stream_format;
+    //stream_format_t d_stream_format;
     std::vector<int32_t> d_buff;
     bool d_agc_mode;
     double d_frequency;
     double d_sample_rate;
+    
+    SoapySDR::ConverterRegistry::ConverterFunction d_converter_func;
     
     // sysfs file handles
     std::fstream d_freq_f;

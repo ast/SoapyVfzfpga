@@ -1,9 +1,47 @@
 #include "SoapyVfzfpga.hpp"
 #include <SoapySDR/Logger.hpp>
 
-#include <iostream>     // std::cout
-#include <fstream>      // std::ifstream
-#include <istream>
+#include <SoapySDR/ConverterPrimatives.hpp>
+
+
+// CS32 <> CF32
+static void genericCS32toCF32(const void *srcBuff, void *dstBuff, const size_t numElems, const double scaler)
+{
+    const size_t elemDepth = 2;
+    
+    if (scaler == 1.0)
+    {
+        auto *src = (int32_t*)srcBuff;
+        auto *dst = (float*)dstBuff;
+        for (size_t i = 0; i < numElems*elemDepth; i++)
+        {
+            dst[i] = SoapySDR::S32toF32(src[i]);
+        }
+    }
+    else
+    {
+        auto *src = (int32_t*)srcBuff;
+        auto *dst = (int32_t*)dstBuff;
+        for (size_t i = 0; i < numElems*elemDepth; i++)
+        {
+            dst[i] = SoapySDR::S32toF32(src[i]) * scaler;
+        }
+    }
+}
+
+// CS32 <> CS16 scaler ignored
+static void genericCS32toCS16(const void *srcBuff, void *dstBuff, const size_t numElems, const double scaler)
+{
+    const size_t elemDepth = 2;
+    
+    auto *src = (int32_t*)srcBuff;
+    auto *dst = (int16_t*)dstBuff;
+    for (size_t i = 0; i < numElems*elemDepth; i++)
+    {
+        dst[i] = SoapySDR::S32toS16(src[i]);
+    }
+}
+
 
 SoapyVfzfgpa::SoapyVfzfgpa() :
 d_agc_mode(false),
@@ -87,6 +125,14 @@ SoapySDR::ArgInfoList SoapyVfzfgpa::getStreamArgsInfo(const int direction, const
 
 SoapySDR::Stream *SoapyVfzfgpa::setupStream(const int direction, const std::string &format, const std::vector<size_t> &channels, const SoapySDR::Kwargs &args)
 {
+    // Register format converters once
+    static SoapySDR::ConverterRegistry registerGenericCS32toCF32(SOAPY_SDR_CS32, SOAPY_SDR_CF32, SoapySDR::ConverterRegistry::GENERIC, &genericCS32toCF32);
+    static SoapySDR::ConverterRegistry registerGenericCS32toCS16(SOAPY_SDR_CS32, SOAPY_SDR_CS16, SoapySDR::ConverterRegistry::GENERIC, &genericCS32toCS16);
+    
+    if (direction != SOAPY_SDR_RX) {
+        throw std::runtime_error("setupStream only RX supported");
+    }
+    
     //check the channel configuration
     if (channels.size() > 1 or (channels.size() > 0 and channels.at(0) != 0))
     {
@@ -95,24 +141,12 @@ SoapySDR::Stream *SoapyVfzfgpa::setupStream(const int direction, const std::stri
     
     SoapySDR_logf(SOAPY_SDR_INFO, "Wants format %s", format.c_str());
     
-    if (format == "CS16") {
-        d_stream_format = STREAM_FORMAT_INT16;
-        SoapySDR_log(SOAPY_SDR_INFO, "Using format CS16");
-    }
-    else if (format == "CS32") {
-        d_stream_format = STREAM_FORMAT_INT32;
-        SoapySDR_log(SOAPY_SDR_INFO, "Using format CS32");
-    }
-    else if (format == "CF32")
-    {
-        d_stream_format = STREAM_FORMAT_FLOAT32;
-        SoapySDR_log(SOAPY_SDR_INFO, "Using format CF32");
-    } else {
-        throw std::runtime_error("setupStream invalid format");
-    }
+    // Format converter function
+    d_converter_func = SoapySDR::ConverterRegistry::getFunction("CS32", format);
+    assert(d_converter_func != nullptr);
     
     d_pcm_handle = alsa_pcm_handle("vfzsdr", d_period_size, SND_PCM_STREAM_CAPTURE);
-    assert(d_pcm_handle != NULL);
+    assert(d_pcm_handle != nullptr);
     
     return (SoapySDR::Stream *) this;
 }
@@ -130,7 +164,6 @@ void SoapyVfzfgpa::closeStream(SoapySDR::Stream *stream)
 size_t SoapyVfzfgpa::getStreamMTU(SoapySDR::Stream *stream) const
 {
     SoapySDR_log(SOAPY_SDR_INFO, "get mtu");
-    
     return d_period_size;
 }
 
@@ -150,8 +183,8 @@ int SoapyVfzfgpa::activateStream(SoapySDR::Stream *stream,
 int SoapyVfzfgpa::deactivateStream(SoapySDR::Stream *stream, const int flags, const long long timeNs)
 {
     SoapySDR_log(SOAPY_SDR_INFO, "deactivate stream");
-    
-    // int err = 0;
+ 
+    if (flags != 0) return SOAPY_SDR_NOT_SUPPORTED;
     
     snd_pcm_drop(d_pcm_handle);
     snd_pcm_prepare(d_pcm_handle);
@@ -167,7 +200,7 @@ int SoapyVfzfgpa::readStream(SoapySDR::Stream *stream,
                              const long timeoutUs)
 {
     // This function has to be well defined at all times
-    if (d_pcm_handle == NULL) {
+    if (d_pcm_handle == nullptr) {
         return 0;
     }
     
@@ -200,36 +233,8 @@ again:
         }
     }
     
-    // Convert to appropriate format
-    switch (d_stream_format) {
-        case STREAM_FORMAT_FLOAT32:
-        {
-            float scale = 1./INT32_MAX;
-            float *out = (float*) buffs[0];
-            int32_t *in = &d_buff[0];
-            for (int i = 0; i < 2 * frames; i++) {
-                out[i] = in[i] * scale;
-            }
-        }
-            break;
-        case STREAM_FORMAT_INT32:
-        {
-            int32_t *out = (int32_t*) buffs[0];
-            int32_t *in = &d_buff[0];
-            for (int i = 0; i < 2 * frames; i++) {
-                out[i] = in[i];
-            }
-        }
-            break;
-        case STREAM_FORMAT_INT16:
-        case STREAM_FORMAT_INT8:
-        default:
-            throw std::runtime_error("readStream invalid format");
-            break;
-    }
-    
-    // const float* data = (const float*) buff0;
-    // SoapySDR_logf(SOAPY_SDR_INFO, "readStream %d %d %f", numElems, elements, data[10]);
+    // Convert. Format is setup in setupStream. 1.0 means to do nothing.
+    d_converter_func(&d_buff[0], buffs[0], frames, 1.0);
     
     return (int)frames;
 }
