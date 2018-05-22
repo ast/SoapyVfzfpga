@@ -3,3 +3,6 @@
 ._*
 
 build/
+
+# Xcode
+SoapyVfzfpga.xcodeproj/project.xcworkspace/xcuserdata/

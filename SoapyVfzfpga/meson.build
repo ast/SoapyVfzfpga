@@ -8,7 +8,7 @@ project('SoapyVfzsdr', 'cpp', 'c',
 soapysdr_dep = dependency('SoapySDR')
 alsa_dep = dependency('alsa')
 
-sources = ['SoapyVfzfgpa.cpp', 'alsa.c']
+sources = ['SoapyVfzfpga.cpp', 'alsa.c']
 soapy_vfzsdr_lib = shared_library('soapyvfzsdr',
                         sources,
                         dependencies : [soapysdr_dep, alsa_dep],

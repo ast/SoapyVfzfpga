@@ -1,20 +1,24 @@
 #include "SoapyVfzfpga.hpp"
 #include <SoapySDR/Logger.hpp>
-#include <iostream>
 
-SoapyVfzfgpa::SoapyVfzfgpa()
+#include <iostream>     // std::cout
+#include <fstream>      // std::ifstream
+#include <istream>
+
+SoapyVfzfgpa::SoapyVfzfgpa() :
+d_agc_mode(false),
+d_period_size(4096),
+d_frequency(0),
+d_sample_rate(89286)
 {
-    //d_pcm_handle = alsa_d_pcm_handle("vfzfpga", 1024, SND_PCM_STREAM_CAPTURE);
-    // SoapySDR_setLogLevel(SOAPY_SDR_FA);
-    d_agc_mode = false;
-    d_period_size = 2048;
-    d_pcm_handle = alsa_pcm_handle("funcubef", d_period_size, SND_PCM_STREAM_CAPTURE);
-    assert(d_pcm_handle != NULL);
+    d_freq_f.open("/sys/class/sdr/vfzsdr/frequency");
+    // Sample buffer
+    d_buff.resize(2 * d_period_size);
 }
 
 SoapyVfzfgpa::~SoapyVfzfgpa()
 {
-    snd_pcm_close(d_pcm_handle);
+    d_freq_f.close();
 }
 
 // Identification API
@@ -44,15 +48,16 @@ bool SoapyVfzfgpa::getFullDuplex(const int direction, const size_t channel) cons
 std::vector<std::string> SoapyVfzfgpa::getStreamFormats(const int direction, const size_t channel) const
 {
     std::vector<std::string> formats;
+    formats.push_back("CS16");
+    formats.push_back("CS32");
     formats.push_back("CF32");
-    //formats.push_back("CF32");
     return formats;
 }
 
 std::string SoapyVfzfgpa::getNativeStreamFormat(const int direction, const size_t channel, double &fullScale) const
 {
-    fullScale = (1 << 16);
-    return "CS16";
+    fullScale = (1 << 24);
+    return "CS32";
 }
 
 SoapySDR::ArgInfoList SoapyVfzfgpa::getStreamArgsInfo(const int direction, const size_t channel) const
@@ -87,11 +92,27 @@ SoapySDR::Stream *SoapyVfzfgpa::setupStream(const int direction, const std::stri
     {
         throw std::runtime_error("setupStream invalid channel selection");
     }
-    if (format != "CF32") {
+    
+    SoapySDR_logf(SOAPY_SDR_INFO, "Wants format %s", format.c_str());
+    
+    if (format == "CS16") {
+        d_stream_format = STREAM_FORMAT_INT16;
+        SoapySDR_log(SOAPY_SDR_INFO, "Using format CS16");
+    }
+    else if (format == "CS32") {
+        d_stream_format = STREAM_FORMAT_INT32;
+        SoapySDR_log(SOAPY_SDR_INFO, "Using format CS32");
+    }
+    else if (format == "CF32")
+    {
+        d_stream_format = STREAM_FORMAT_FLOAT32;
+        SoapySDR_log(SOAPY_SDR_INFO, "Using format CF32");
+    } else {
         throw std::runtime_error("setupStream invalid format");
     }
     
-    SoapySDR_log(SOAPY_SDR_INFO, "Using format CF32");
+    d_pcm_handle = alsa_pcm_handle("vfzsdr", d_period_size, SND_PCM_STREAM_CAPTURE);
+    assert(d_pcm_handle != NULL);
     
     return (SoapySDR::Stream *) this;
 }
@@ -99,7 +120,11 @@ SoapySDR::Stream *SoapyVfzfgpa::setupStream(const int direction, const std::stri
 void SoapyVfzfgpa::closeStream(SoapySDR::Stream *stream)
 {
     SoapySDR_log(SOAPY_SDR_INFO, "close stream");
-    // clear bufs
+    if (d_pcm_handle != nullptr) {
+        snd_pcm_close(d_pcm_handle);
+    }
+    
+    
 }
 
 size_t SoapyVfzfgpa::getStreamMTU(SoapySDR::Stream *stream) const
@@ -125,8 +150,11 @@ int SoapyVfzfgpa::activateStream(SoapySDR::Stream *stream,
 int SoapyVfzfgpa::deactivateStream(SoapySDR::Stream *stream, const int flags, const long long timeNs)
 {
     SoapySDR_log(SOAPY_SDR_INFO, "deactivate stream");
-    snd_pcm_pause(d_pcm_handle, 1);
-    snd_pcm_reset(d_pcm_handle);
+    
+    // int err = 0;
+    
+    snd_pcm_drop(d_pcm_handle);
+    snd_pcm_prepare(d_pcm_handle);
     
     return 0;
 }
@@ -138,38 +166,72 @@ int SoapyVfzfgpa::readStream(SoapySDR::Stream *stream,
                              long long &timeNs,
                              const long timeoutUs)
 {
+    // This function has to be well defined at all times
     if (d_pcm_handle == NULL) {
         return 0;
     }
-    // buffs is an array of pointers, we only use the first channel.
-    void* buff0 = buffs[0];
-
-    // timestamp
-    snd_pcm_uframes_t avail;
-    snd_htimestamp_t tstamp;
-    long long *longstamp;
-    longstamp = (long long*)&tstamp;
     
-    int elements;
-    
-    // Timeout if not ready
-    if(snd_pcm_wait(d_pcm_handle, int(timeoutUs / 1000))) {
-        // Retreive a timestamp
-        snd_pcm_htimestamp(d_pcm_handle, &avail, &tstamp);
-        timeNs = *longstamp;
-        
-        elements = (int) snd_pcm_readi(d_pcm_handle, buff0, MIN(d_period_size, numElems));
-        if(elements < 0) {
-            throw std::runtime_error("readStream something wrong");
-        }
-
-        // const float* data = (const float*) buff0;
-        // SoapySDR_logf(SOAPY_SDR_INFO, "readStream %d %d %f", numElems, elements, data[10]);
-    } else {
-        throw std::runtime_error("timeout");
+    // Are we running?
+    if (snd_pcm_state(d_pcm_handle) != SND_PCM_STATE_RUNNING) {
+        return 0;
     }
     
-    return elements;
+    // Timeout if not ready
+    if(snd_pcm_wait(d_pcm_handle, int(timeoutUs / 1000)) == 0) {
+        return SOAPY_SDR_TIMEOUT;
+    }
+    
+    // Read from ALSA
+    snd_pcm_sframes_t frames = 0;
+    int err = 0;
+    // no program is complete without a goto
+again:
+    // read numElems or d_period_size
+    frames = snd_pcm_readi(d_pcm_handle, &d_buff[0], MIN(d_period_size, numElems));
+    // try to handle xruns
+    if(frames < 0) {
+        err = (int) frames;
+        if(snd_pcm_recover(d_pcm_handle, err, 0) == 0) {
+            SoapySDR_logf(SOAPY_SDR_ERROR, "readStream recoverd from %s", snd_strerror(err));
+            goto again;
+        } else {
+            SoapySDR_logf(SOAPY_SDR_ERROR, "readStream error: %s", snd_strerror(err));
+            return SOAPY_SDR_STREAM_ERROR;
+        }
+    }
+    
+    // Convert to appropriate format
+    switch (d_stream_format) {
+        case STREAM_FORMAT_FLOAT32:
+        {
+            float scale = 1./INT32_MAX;
+            float *out = (float*) buffs[0];
+            int32_t *in = &d_buff[0];
+            for (int i = 0; i < 2 * frames; i++) {
+                out[i] = in[i] * scale;
+            }
+        }
+            break;
+        case STREAM_FORMAT_INT32:
+        {
+            int32_t *out = (int32_t*) buffs[0];
+            int32_t *in = &d_buff[0];
+            for (int i = 0; i < 2 * frames; i++) {
+                out[i] = in[i];
+            }
+        }
+            break;
+        case STREAM_FORMAT_INT16:
+        case STREAM_FORMAT_INT8:
+        default:
+            throw std::runtime_error("readStream invalid format");
+            break;
+    }
+    
+    // const float* data = (const float*) buff0;
+    // SoapySDR_logf(SOAPY_SDR_INFO, "readStream %d %d %f", numElems, elements, data[10]);
+    
+    return (int)frames;
 }
 
 
@@ -261,16 +323,27 @@ void SoapyVfzfgpa::setFrequency(const int direction,
                                 const double frequency,
                                 const SoapySDR::Kwargs &args)
 {
+    SoapySDR_log(SOAPY_SDR_INFO, "setFrequency");
+    
     if (name == "RF")
     {
+        d_freq_f << int(frequency);
+        d_freq_f.clear();
+        d_freq_f.seekg(0, std::ios::beg);
+        
         d_frequency = frequency;
     }
 }
 
 double SoapyVfzfgpa::getFrequency(const int direction, const size_t channel, const std::string &name) const
 {
-    SoapySDR_log(SOAPY_SDR_INFO, "getFrequency");
-    return d_frequency;
+    SoapySDR_logf(SOAPY_SDR_INFO, "getFrequency");
+    if (name == "RF")
+    {
+        return d_frequency;
+    } else {
+        throw std::runtime_error("getFrequency for nonexisting tuner");
+    }
 }
 
 std::vector<std::string> SoapyVfzfgpa::listFrequencies(const int direction, const size_t channel) const
@@ -323,7 +396,7 @@ std::vector<double> SoapyVfzfgpa::listSampleRates(const int direction, const siz
     SoapySDR_log(SOAPY_SDR_INFO, "listSampleRates");
     
     std::vector<double> rates;
-    rates.push_back(192000);
+    rates.push_back(89286.);
     return rates;
 }
 
@@ -338,21 +411,6 @@ double SoapyVfzfgpa::getBandwidth(const int direction, const size_t channel) con
 {
     SoapySDR_log(SOAPY_SDR_INFO, "getBandwidth");
     return SoapySDR::Device::getBandwidth(direction, channel);
-}
-
-bool SoapyVfzfgpa::hasHardwareTime(const std::string &what) const
-{
-    return true;
-}
-
-long long SoapyVfzfgpa::getHardwareTime(const std::string &what) const
-{
-    snd_pcm_uframes_t avail;
-    snd_htimestamp_t tstamp;
-    long long *longstamp;
-    longstamp = (long long*) &tstamp;
-    snd_pcm_htimestamp(d_pcm_handle, &avail, &tstamp);
-    return *longstamp;
 }
 
 SoapySDR::ArgInfoList SoapyVfzfgpa::getSettingInfo(void) const
@@ -408,7 +466,7 @@ SoapySDR::Device *makeVfzfgpa(const SoapySDR::Kwargs &args)
     
     //create an instance of the device object given the args
     //here we will translate args into something used in the constructor
-    return new SoapyVfzfgpa();
+    return (SoapySDR::Device*) new SoapyVfzfgpa();
 }
 
 static SoapySDR::Registry registerVfzfgpa("vfzfpga", &findVfzfgpa, &makeVfzfgpa, SOAPY_SDR_ABI_VERSION);

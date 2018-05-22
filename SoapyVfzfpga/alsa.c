@@ -13,8 +13,8 @@ snd_pcm_t* alsa_pcm_handle(const char* pcm_name, snd_pcm_uframes_t frames, snd_p
     snd_pcm_t *pcm_handle = NULL;
     snd_pcm_hw_params_t *hwparams;
     
-    const unsigned int rate = 192000;      // Fixed sample rate of VFZSDR.
-    const unsigned int periods = 2;       // Number of periods in ALSA ringbuffer.
+    const unsigned int rate = 96000;      // Fixed sample rate of VFZSDR.
+    const unsigned int periods = 4;       // Number of periods in ALSA ringbuffer.
     
     snd_pcm_hw_params_alloca(&hwparams);
     
@@ -45,8 +45,7 @@ snd_pcm_t* alsa_pcm_handle(const char* pcm_name, snd_pcm_uframes_t frames, snd_p
     
     /* Set sample format */
     /* Use native format of device to avoid costly conversions */
-    //if (snd_pcm_hw_params_set_format(pcm_handle, hwparams, SND_PCM_FORMAT_S16) < 0) {
-    if (snd_pcm_hw_params_set_format(pcm_handle, hwparams, SND_PCM_FORMAT_FLOAT) < 0) {
+    if (snd_pcm_hw_params_set_format(pcm_handle, hwparams, SND_PCM_FORMAT_S32) < 0) {
         fprintf(stderr, "Error setting format.\n");
         exit(EXIT_FAILURE);
     }
@@ -87,9 +86,11 @@ snd_pcm_t* alsa_pcm_handle(const char* pcm_name, snd_pcm_uframes_t frames, snd_p
     snd_pcm_uframes_t bufs = 0;
     snd_pcm_hw_params_get_buffer_size(hwparams, &bufs);
     
-    // int err;
+
 
     /*
+    int err;
+     
     snd_pcm_sw_params_t *swparams;
     snd_pcm_sw_params_alloca(&swparams);
     // Get the current swparams

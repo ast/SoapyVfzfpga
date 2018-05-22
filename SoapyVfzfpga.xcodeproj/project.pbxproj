@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B1D8D1F520B29A5500924E1B /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1D8D1F420B29A5500924E1B /* main.cpp */; };
-		B1D8D1FC20B29EF400924E1B /* SoapyVfzfgpa.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1D8D1FB20B29EF400924E1B /* SoapyVfzfgpa.cpp */; };
+		B1D8D1FC20B29EF400924E1B /* SoapyVfzfpga.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1D8D1FB20B29EF400924E1B /* SoapyVfzfpga.cpp */; };
 		B1D8D20020B29F8300924E1B /* alsa.c in Sources */ = {isa = PBXBuildFile; fileRef = B1D8D1FE20B29F8300924E1B /* alsa.c */; };
 /* End PBXBuildFile section */
 
@@ -27,7 +27,7 @@
 /* Begin PBXFileReference section */
 		B1D8D1F120B29A5500924E1B /* SoapyVfzfpga */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = SoapyVfzfpga; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1D8D1F420B29A5500924E1B /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
-		B1D8D1FB20B29EF400924E1B /* SoapyVfzfgpa.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SoapyVfzfgpa.cpp; sourceTree = "<group>"; };
+		B1D8D1FB20B29EF400924E1B /* SoapyVfzfpga.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SoapyVfzfpga.cpp; sourceTree = "<group>"; };
 		B1D8D1FE20B29F8300924E1B /* alsa.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = alsa.c; sourceTree = "<group>"; };
 		B1D8D1FF20B29F8300924E1B /* alsa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = alsa.h; sourceTree = "<group>"; };
 		B1D8D20220B2B00200924E1B /* SoapyVfzfpga.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SoapyVfzfpga.hpp; sourceTree = "<group>"; };
@@ -66,7 +66,7 @@
 			children = (
 				B1D8D20420B2BB3000924E1B /* meson.build */,
 				B1D8D1FD20B29F7500924E1B /* alsa */,
-				B1D8D1FB20B29EF400924E1B /* SoapyVfzfgpa.cpp */,
+				B1D8D1FB20B29EF400924E1B /* SoapyVfzfpga.cpp */,
 				B1D8D20220B2B00200924E1B /* SoapyVfzfpga.hpp */,
 				B1D8D1F420B29A5500924E1B /* main.cpp */,
 			);
@@ -140,7 +140,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1D8D1F520B29A5500924E1B /* main.cpp in Sources */,
-				B1D8D1FC20B29EF400924E1B /* SoapyVfzfgpa.cpp in Sources */,
+				B1D8D1FC20B29EF400924E1B /* SoapyVfzfpga.cpp in Sources */,
 				B1D8D20020B29F8300924E1B /* alsa.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
